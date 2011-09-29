@@ -1,0 +1,30 @@
+//
+//
+//
+#define LAST_ROW  NUM_ROWS - 1
+#define LAST_COL  NUM_COLS - 1
+#define NUM_PINS  NUM_ROWS + 1
+///
+/// macros for returning the data direction register 
+/// address (ddr), the port address (port) and the
+/// bit value for each pin using the led_pins array.
+///
+#define ddr(i)  led_pins[i].ddr  
+#define port(i) led_pins[i].port
+#define bv(i)   (_BV(led_pins[i].bit))
+///
+/// led control functions for PICO1TR-LED-L
+/// 
+void led_init(uint16_t delay_time);
+void led_select_row(uint8_t row);
+void led_select_col(uint8_t col);
+///
+/// 
+///
+void led_output_row(uint8_t row, uint8_t *data);
+void led_output_frame(uint8_t *data);
+void led_output_ascii_frame(uint8_t *data);
+void led_sequence(void);
+
+uint8_t led_output_char(uint8_t ord);
+void display_chars(uint8_t first, uint8_t num_chars, uint8_t n);

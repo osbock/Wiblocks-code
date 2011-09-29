@@ -1,0 +1,178 @@
+//
+// generic include file for PICO1TR_LED_L.c and PICO1TR_LED_S.c
+//
+
+static uint8_t  led_maskb;
+static uint8_t  led_maskc;
+static uint8_t  led_maskd;
+static uint16_t led_delay; // uS
+
+static uint8_t led_row_i = 0; // selected row index
+static uint8_t led_col_i = 1; // selected col index
+
+void led_init(uint16_t delay_time) {
+  uint8_t i;
+  //
+  // create masks used to enable and disable all LEDs
+  //
+  for (i = 0; i < NUM_PINS; i++) {
+    if (led_pins[i].ddr == &DDRB) led_maskb |= _BV(led_pins[i].bit);
+    if (led_pins[i].ddr == &DDRC) led_maskc |= _BV(led_pins[i].bit);
+    if (led_pins[i].ddr == &DDRD) led_maskd |= _BV(led_pins[i].bit);
+  }
+  //
+  // disable all LEDs
+  //
+  DDRB |= ~led_maskb;
+  DDRC |= ~led_maskb;
+  DDRD |= ~led_maskd;
+  led_row_i = 0;
+  led_col_i = 1;
+  led_delay = delay_time;
+}
+
+//
+// To turn an LED on select the row then select the column.  
+// Selecting a row deselects a column.
+//
+// rows are enabled by setting the data direction
+// of the row pin to output and by setting the output
+// to 0.
+//
+// columns are enabled by setting the data direction
+// of the column pin to output and by setting the output
+// to 1.
+//
+// the led_select_row and led_select_column functions
+// are used to enable a single LED.
+// 
+void led_select_row(uint8_t row) {
+  if (row > LAST_ROW) return;
+  //
+  // disable the current column and row
+  //
+  *ddr(led_col_i)  &= ~bv(led_col_i);
+  *ddr(led_row_i)  &= ~bv(led_row_i);
+  //
+  // save the row index and enable the row by setting the data
+  // direction to output and the level to 0
+  // 
+  led_row_i = row;
+  led_col_i = row + 1; 
+  *ddr(led_row_i)  |=  bv(led_row_i);
+  *port(led_row_i) &= ~bv(led_row_i);
+}
+
+void led_select_col(uint8_t col) {
+  //
+  // disable the current column
+  // 
+  *ddr(led_col_i)  &= ~bv(led_col_i);
+  //
+  // calculate and save the column index and enable
+  // the column by setting the column pin
+  // to output and the level to 1
+  //
+  led_col_i = col >= led_row_i ? col + 1 : col;
+  *ddr(led_col_i)  |= bv(led_col_i);
+  *port(led_col_i) |= bv(led_col_i);
+}
+
+void led_output_row(uint8_t r, uint8_t *data) {
+  uint8_t col; // led_column
+  uint8_t bit; // current bit mask
+  uint8_t *p;
+  uint8_t bit_pos = (r+1) * NUM_COLS - 1;
+  led_select_row(r);
+  p = data;
+  p  += bit_pos / 8; 
+  bit = 7 - bit_pos % 8;
+  col = 0;
+  while (1) {
+    if (*p & _BV(bit)) {
+      led_select_col(col); 
+      delay_us(led_delay);
+    }
+    if (++col > LAST_COL) break;
+    if (++bit == 8) {
+      bit = 0;
+      p--;
+    }
+  }
+}
+
+void led_output_frame(uint8_t *data) {
+  uint8_t  row = 0;
+  uint8_t *p;
+  p = data;
+  while(1) {
+    led_output_row(row, p);
+    if (++row > LAST_ROW) break;
+  }
+}
+
+void led_output_ascii_frame(uint8_t *data) {
+  uint8_t  row = 0;
+  uint8_t  col = LAST_COL;
+  uint8_t *p;
+  p = data;
+  led_select_row(row);
+  while(1) {
+    if (*p == '\0') return;
+    if (*p == '*')  led_select_col(col);
+    p++;
+    if (col == 0) {
+      if (++row >  LAST_ROW) return;
+      led_select_row(row);
+      col = LAST_COL;
+    } else {
+      col--;
+    }
+  }
+}
+
+
+//
+// scan through the rows and columns 
+// one LED at a time
+//
+void led_sequence() {
+  uint8_t row;
+  uint8_t col;
+  for (row = 0; row < NUM_ROWS; row++) {
+    led_select_row(row);
+    col = NUM_COLS - 1;
+    while(1) {
+      led_select_col(col);
+      delay_ms(100);
+      if (col == 0) break;
+      col--;
+    }
+  }
+}
+
+//
+// outputs a single character 
+//
+uint8_t led_output_char(uint8_t ord) {
+  if (ord > LED_LAST_ORD) return(1);
+  led_output_frame(led_char[ord]);
+  return(0);
+}
+
+//
+// display a group of characters
+//
+void display_chars(uint8_t first, uint8_t num_chars, uint8_t n) {
+  uint8_t i, j, k;
+  for (i = 0; i < n; i++) {
+    for (j = 0; j < num_chars; j++) {
+      for (k = 0; k < 100; k++) { 
+	led_output_char(first + j);
+      }
+    }    
+  }
+}
+
+
+
